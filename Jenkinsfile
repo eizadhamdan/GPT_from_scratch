@@ -1,6 +1,6 @@
 pipeline {
     agent any
-    paramaters {
+    parameters {
         choice(name: 'VERSION', choices: ['1.0', '2.0', '3.0'], description: 'Select the version to build')
         booleanParam(name: 'executeTests', defaultValue: true, description: 'Run tests after build')
     }
