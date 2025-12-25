@@ -1,6 +1,9 @@
 pipeline {
     agent any
-
+    paramaters {
+        choice(name: 'VERSION', choices: ['1.0', '2.0', '3.0'], description: 'Select the version to build')
+        booleanParam(name: 'executeTests', defaultValue: true, description: 'Run tests after build')
+    }
     stages {
 
         stage("build") {
@@ -14,7 +17,7 @@ pipeline {
         stage("test") {
             when {
                 expression {
-                    BRANCH_NAME == 'main'
+                    BRANCH_NAME == 'main' && params.executeTests == true
                 }
             }
             steps {
@@ -27,6 +30,7 @@ pipeline {
 
             steps {
                 echo "Deploying..."
+                echo "Deployed version: ${params.VERSION}"
             }
 
         }
