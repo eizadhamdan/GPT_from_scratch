@@ -4,7 +4,7 @@ pipeline {
     stages {
 
         stage("build") {
-
+            
             steps {
                 echo "Building..."
             }
@@ -12,7 +12,11 @@ pipeline {
         }
 
         stage("test") {
-
+            when {
+                expression {
+                    BRANCH_NAME == 'main'
+                }
+            }
             steps {
                 echo "Testing..."
             }
