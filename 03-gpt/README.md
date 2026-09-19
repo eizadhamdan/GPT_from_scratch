@@ -74,7 +74,7 @@ pip install torch
 python gpt.py
 ```
 
-The script prints training and validation loss during training and then generates text from a learned prompt context.
+The script prints training and validation loss during training and then generates text starting from an empty (all-zeros) context.
 
 ---
 
@@ -82,7 +82,7 @@ The script prints training and validation loss during training and then generate
 
 ### The task
 
-A language model assigns a probability to a sequence of tokens $x_1, x_2, \dots, x_T$ using the chain rule:
+A language model assigns a probability to a sequence of tokens `x_1, x_2, ..., x_T` using the chain rule:
 
 ```text
 P(x_1, ..., x_T) = P(x_1) · P(x_2 | x_1) · P(x_3 | x_1, x_2) · ... · P(x_T | x_1, ..., x_{T-1})
@@ -197,13 +197,13 @@ The model sees random context windows from the corpus. Each window is paired wit
 
 ```mermaid
 flowchart TD
-    A["Token ids (B, T)"] --> B["Token embedding\nvocab_size -> 384"]
-    P["Position 0..T-1"] --> C["Position embedding\n256 -> 384"]
+    A["Token ids (B, T)"] --> B["Token embedding<br/>vocab_size → 384"]
+    P["Position 0..T-1"] --> C["Position embedding<br/>256 → 384"]
     B --> D["Sum (B, T, 384)"]
     C --> D
     D --> E["Transformer block × 6"]
     E --> F["Final LayerNorm"]
-    F --> G["Linear head\n384 -> vocab_size"]
+    F --> G["Linear head<br/>384 → vocab_size"]
     G --> H["Logits (B, T, vocab_size)"]
 ```
 
@@ -272,7 +272,7 @@ The attention matrix is masked so each token can only attend to itself and earli
 
 ### Attention scaling
 
-The dot products are divided by $\sqrt{\text{head\_size}}$ so the softmax remains well behaved rather than collapsing into a nearly one-hot distribution.
+The dot products are divided by $\sqrt{d_k}$, where $d_k$ is the head size (64 in this configuration), so the softmax remains well behaved rather than collapsing into a nearly one-hot distribution. In the code, this is the `k.shape[-1] ** -0.5` factor.
 
 ---
 
@@ -342,7 +342,7 @@ Layer normalization stabilizes activations by normalizing each token vector acro
 
 ## Dropout
 
-Dropout is applied during training to reduce overfitting. It is used in the attention output projection and in the feed-forward sublayer.
+Dropout is applied during training to reduce overfitting. It is used on the attention weights, on the attention output projection, and in the feed-forward sublayer.
 
 The model switches between training and evaluation behavior using `model.train()` and `model.eval()`.
 
@@ -429,6 +429,9 @@ This initialization keeps the activations and gradients in a stable range at the
 ## Loss function
 
 ```python
+B, T, V = logits.shape
+logits = logits.view(B * T, V)
+targets = targets.view(B * T)
 loss = F.cross_entropy(logits, targets)
 ```
 
@@ -524,8 +527,6 @@ Validation loss: 1.4844
 
 The final checkpoint at step 5999 achieved a lower training loss of 0.7560, but its validation loss increased to 1.6252.
 
-The overfitting statement is directly supported by the loss trajectory, particularly the divergence after step 3000. The existing README explains that validation loss is estimated separately from training loss, so this section builds naturally on that.
-
 ### Sample output
 
 After training, the model generated the following sample text:
@@ -538,7 +539,7 @@ CLARENCE: Methought thy hurt Did set me to me grace and tell me well, By y crown
 
 The generated text shows that the model has learned corpus-specific character-level patterns, including dialogue formatting and character-name-like tokens. However, the output is still noisy and contains malformed words and inconsistent sentences, which is expected for a small character-level Transformer trained for a limited number of steps.
 
-Because validation loss reached its minimum around step 3000 and increased afterward, the checkpoint corresponding to the lower validation loss may produce better generalization than the final training checkpoint.
+Because validation loss reached its minimum around step 3000 and increased afterward, a checkpoint saved near that step would likely generalize better than the final checkpoint. Saving the model whenever validation loss improves (early stopping) is a simple way to capture it.
 
 ---
 
@@ -605,7 +606,7 @@ The generation can start from a blank context or from a short prompt, depending 
 | `nn.ReLU` | Non-linearity in the feed-forward block |
 | `nn.Sequential` | Chains modules in order |
 | `nn.ModuleList` | Registers a list of submodules |
-| `register_buffer` | Keeps non-trainable tensors with the module |
+| `register_buffer` | Keeps non-trainable tensors (the causal mask) with the module |
 | `F.softmax` | Converts logits into probabilities |
 | `torch.matmul` / `@` | Matrix multiplication used in attention |
 | `F.cross_entropy` | Loss for next-token predictions |
