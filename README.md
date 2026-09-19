@@ -244,48 +244,6 @@ See [`01-bigram/README.md`](./01-bigram/README.md) for the implementation detail
 
 ---
 
-## Repository map
-
-```text
-GPT_from_scratch/
-├── 01-bigram/
-│   ├── bigram.py
-│   └── README.md
-├── 02-attention/
-│   ├── gpt-dev.ipynb
-│   └── README.md
-├── 03-gpt/
-│   ├── gpt.py
-│   └── README.md
-├── assets/
-│   ├── gpt-architecture.png
-│   └── self-attention.png
-├── data/
-│   └── input.txt
-├── README.md
-├── requirements.txt
-├── LICENSE
-└── .gitignore
-```
-
-### Main files
-
-- **[`01-bigram/bigram.py`](./01-bigram/bigram.py)**: A minimal character-level bigram language model.
-- **[`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb)**: A step-by-step notebook that develops the ideas behind GPT-style modeling, including embeddings, weighted aggregation, causal attention, and normalization.
-- **[`03-gpt/gpt.py`](./03-gpt/gpt.py)**: The complete decoder-only Transformer implementation.
-
-### Documentation
-
-Each implementation has its own detailed README:
-
-- [`01-bigram/README.md`](./01-bigram/README.md)
-- [`02-attention/README.md`](./02-attention/README.md)
-- [`03-gpt/README.md`](./03-gpt/README.md)
-
-The root README is intended as the high-level overview; the folder-level READMEs contain the implementation details.
-
----
-
 ## Quick start
 
 Install the dependencies:
@@ -311,8 +269,6 @@ Open the attention notebook with Jupyter:
 ```text
 02-attention/gpt-dev.ipynb
 ```
-
-> **Note:** Since the shared corpus is stored in `data/input.txt`, the Python implementations should reference that path when loading the training data.
 
 ---
 
