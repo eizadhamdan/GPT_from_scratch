@@ -5,9 +5,9 @@ from torch.nn import functional as F
 # hyperparameters
 batch_size = 32  # num of independent sequences we'll process in parallel
 block_size = 8  # max context length for predictions
-max_iters = 3000
+max_iters = 6000
 eval_interval = 300
-learning_rate = 1e-2
+learning_rate = 1e-3
 device = "cuda" if torch.cuda.is_available() else "cpu"
 eval_iters = 200
 # ------------
