@@ -35,11 +35,7 @@ This simple loop is the foundation of autoregressive text generation.
 The model learns by maximizing the probability of the observed next tokens, or equivalently minimizing **cross-entropy / negative log-likelihood**:
 
 $$
-\mathcal{L}
-=
--\frac{1}{T}
-\sum_{t=1}^{T}
-\log P_\theta(x_t \mid x_{<t}).
+\mathcal{L} = -\frac{1}{T} \sum_{t=1}^{T} \log P_\theta(x_t \mid x_{\lt t}).
 $$
 
 ---
@@ -56,18 +52,13 @@ This repository is organized as a progression rather than a single giant model.
 
 The progression is intentional:
 
-```text
-Bigram
-   ↓
-Learn next-token prediction
-   ↓
-Understand context and weighted aggregation
-   ↓
-Introduce causal self-attention
-   ↓
-Stack Transformer blocks
-   ↓
-GPT-style autoregressive language model
+```mermaid
+flowchart TD
+    A["Bigram"] --> B["Learn next-token prediction"]
+    B --> C["Understand context and weighted aggregation"]
+    C --> D["Introduce causal self-attention"]
+    D --> E["Stack Transformer blocks"]
+    E --> F["GPT-style autoregressive language model"]
 ```
 
 ---
@@ -99,39 +90,36 @@ flowchart TD
     A["Raw text"] --> B["Character tokenizer"]
     B --> C["Token IDs<br/>(B, T)"]
     C --> D["Token embeddings"]
-
     P["Position IDs"] --> E["Position embeddings"]
-
     D --> F["Add embeddings"]
     E --> F
-
     F --> G["Transformer Block 1"]
     G --> H["..."]
     H --> I["Transformer Block 6"]
-
     I --> J["Final LayerNorm"]
     J --> K["Linear language-model head"]
     K --> L["Logits<br/>(B, T, V)"]
     L --> M["Softmax"]
     M --> N["Next-token probabilities"]
     N --> O["Sample next token"]
-    O --> C
+    O -->|"append to context"| C
 ```
 
-A useful way to think about each Transformer block is:
+### Inside one Transformer block
 
-```text
-x
-│
-├── LayerNorm
-├── Causal Self-Attention
-├── Residual Add
-│
-├── LayerNorm
-├── Feed-Forward Network
-├── Residual Add
-│
-└── output
+Each block applies attention and a feed-forward network, each preceded by LayerNorm and wrapped in a residual connection (the "pre-norm" pattern):
+
+```mermaid
+flowchart TD
+    X["Input x"] --> LN1["LayerNorm"]
+    LN1 --> SA["Causal Self-Attention"]
+    SA --> ADD1(("+"))
+    X -->|"residual"| ADD1
+    ADD1 --> LN2["LayerNorm"]
+    LN2 --> FFN["Feed-Forward Network"]
+    FFN --> ADD2(("+"))
+    ADD1 -->|"residual"| ADD2
+    ADD2 --> OUT["Output"]
 ```
 
 The complete implementation uses this pattern repeatedly across the Transformer stack.
@@ -155,41 +143,30 @@ $$
 Self-attention does this by projecting token representations into **queries, keys, and values**:
 
 $$
-Q = XW_Q,\qquad
-K = XW_K,\qquad
-V = XW_V.
+Q = XW_Q, \qquad K = XW_K, \qquad V = XW_V.
 $$
 
 The attention operation is
 
 $$
-\mathrm{Attention}(Q,K,V)
-=
-\mathrm{softmax}
-\left(
-\frac{QK^\top}{\sqrt{d_k}} + M
-\right)V,
+\mathrm{Attention}(Q,K,V) = \mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}} + M\right)V,
 $$
 
-where \(M\) is the **causal mask**. Future positions are masked so that a token cannot use information that would not yet exist during generation.
+where $M$ is the **causal mask**. Future positions are masked so that a token cannot use information that would not yet exist during generation.
 
 Conceptually:
 
-```text
-Current token
-     │
-     ├── Query ──────────┐
-     │                   │
-     │                compare
-     │                   │
-Earlier tokens           ▼
-     │            Attention weights
-     ├── Keys ───────────┤
-     │                   │
-     └── Values ─────────┘
-                         │
-                         ▼
-              Context-aware representation
+```mermaid
+flowchart LR
+    T["Current token"] -->|"W_Q"| Q["Query"]
+    E["Earlier tokens"] -->|"W_K"| K["Keys"]
+    E -->|"W_V"| V["Values"]
+    Q --> S["Compare query with keys<br/>(scaled dot product)"]
+    K --> S
+    S --> W["Causal mask + softmax<br/>= attention weights"]
+    W --> O["Weighted sum"]
+    V --> O
+    O --> R["Context-aware representation"]
 ```
 
 The notebook [`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb), documented in [`02-attention/README.md`](./02-attention/README.md), builds toward this idea step by step.
@@ -200,13 +177,10 @@ The notebook [`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb), docum
 
 The model ultimately produces **logits**: unnormalized scores for every possible next token.
 
-For logits \(z_1,\ldots,z_V\), softmax converts them into probabilities:
+For logits $z_1, \ldots, z_V$, softmax converts them into probabilities:
 
 $$
-p_i
-=
-\frac{e^{z_i}}
-{\sum_{j=1}^{V} e^{z_j}}.
+p_i = \frac{e^{z_i}}{\sum_{j=1}^{V} e^{z_j}}.
 $$
 
 The training target is the actual next token. Cross-entropy encourages the model to assign higher probability to that token.
@@ -214,17 +188,7 @@ The training target is the actual next token. Cross-entropy encourages the model
 During generation, the model can sample from the resulting distribution:
 
 ```text
-logits
-  ↓
-softmax
-  ↓
-probability distribution
-  ↓
-sample one token
-  ↓
-append token to context
-  ↓
-repeat
+logits → softmax → probability distribution → sample one token → append to context → repeat
 ```
 
 ---
@@ -240,20 +204,12 @@ Input:  A B C D E
 Target: B C D E F
 ```
 
-For a sequence of length \(T\), all next-token predictions can be trained in parallel because the causal mask prevents each position from seeing future tokens.
+For a sequence of length $T$, all next-token predictions can be trained in parallel because the causal mask prevents each position from seeing future tokens.
 
 The training loop follows the standard pattern:
 
 ```text
-sample batch
-    ↓
-forward pass
-    ↓
-calculate loss
-    ↓
-backpropagation
-    ↓
-update parameters
+sample batch → forward pass → calculate loss → backpropagation → update parameters
 ```
 
 ### During generation
@@ -261,17 +217,7 @@ update parameters
 Generation is autoregressive:
 
 ```text
-Prompt
-  ↓
-predict token
-  ↓
-append token
-  ↓
-predict token
-  ↓
-append token
-  ↓
-...
+Prompt → predict token → append token → predict token → append token → ...
 ```
 
 The implementation keeps the most recent `block_size` tokens as the model context during generation.
@@ -302,26 +248,20 @@ See [`01-bigram/README.md`](./01-bigram/README.md) for the implementation detail
 
 ```text
 GPT_from_scratch/
-│
 ├── 01-bigram/
 │   ├── bigram.py
 │   └── README.md
-│
 ├── 02-attention/
 │   ├── gpt-dev.ipynb
 │   └── README.md
-│
 ├── 03-gpt/
 │   ├── gpt.py
 │   └── README.md
-│
 ├── assets/
 │   ├── gpt-architecture.png
 │   └── self-attention.png
-│
 ├── data/
 │   └── input.txt
-│
 ├── README.md
 ├── requirements.txt
 ├── LICENSE
@@ -330,14 +270,9 @@ GPT_from_scratch/
 
 ### Main files
 
-**[`01-bigram/bigram.py`](./01-bigram/bigram.py)**  
-A minimal character-level bigram language model.
-
-**[`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb)**  
-A step-by-step notebook that develops the ideas behind GPT-style modeling, including embeddings, weighted aggregation, causal attention, and normalization.
-
-**[`03-gpt/gpt.py`](./03-gpt/gpt.py)**  
-The complete decoder-only Transformer implementation.
+- **[`01-bigram/bigram.py`](./01-bigram/bigram.py)**: A minimal character-level bigram language model.
+- **[`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb)**: A step-by-step notebook that develops the ideas behind GPT-style modeling, including embeddings, weighted aggregation, causal attention, and normalization.
+- **[`03-gpt/gpt.py`](./03-gpt/gpt.py)**: The complete decoder-only Transformer implementation.
 
 ### Documentation
 
@@ -388,45 +323,29 @@ Open the attention notebook with Jupyter:
 A language model decomposes the probability of a sequence as
 
 $$
-P(x_1,\ldots,x_T)
-=
-\prod_{t=1}^{T}
-P(x_t\mid x_{<t}).
+P(x_1,\ldots,x_T) = \prod_{t=1}^{T} P(x_t \mid x_{\lt t}).
 $$
 
 ### 2. Scaled dot-product attention
 
 $$
-\mathrm{Attention}(Q,K,V)
-=
-\mathrm{softmax}
-\left(
-\frac{QK^\top}{\sqrt{d_k}} + M
-\right)V.
+\mathrm{Attention}(Q,K,V) = \mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}} + M\right)V.
 $$
 
 ### 3. Next-token loss
 
 $$
-\mathcal{L}
-=
--\frac{1}{T}
-\sum_{t=1}^{T}
-\log P_\theta(x_t\mid x_{<t}).
+\mathcal{L} = -\frac{1}{T} \sum_{t=1}^{T} \log P_\theta(x_t \mid x_{\lt t}).
 $$
 
 These three ideas connect much of the implementation:
 
-```text
-Sequence probability
-        ↓
-Next-token prediction
-        ↓
-Attention builds context
-        ↓
-Cross-entropy measures error
-        ↓
-Backpropagation updates the model
+```mermaid
+flowchart TD
+    A["Sequence probability"] --> B["Next-token prediction"]
+    B --> C["Attention builds context"]
+    C --> D["Cross-entropy measures error"]
+    D --> E["Backpropagation updates the model"]
 ```
 
 ---
@@ -435,11 +354,8 @@ Backpropagation updates the model
 
 For the conceptual route:
 
-**[`01-bigram/README.md`](./01-bigram/README.md)**  
-→ **[`02-attention/README.md`](./02-attention/README.md)**  
-→ **[`03-gpt/README.md`](./03-gpt/README.md)**
+[`01-bigram/README.md`](./01-bigram/README.md) → [`02-attention/README.md`](./02-attention/README.md) → [`03-gpt/README.md`](./03-gpt/README.md)
 
 To jump straight into the complete implementation:
 
-**[`03-gpt/gpt.py`](./03-gpt/gpt.py)**  
-→ **[`03-gpt/README.md`](./03-gpt/README.md)**
+[`03-gpt/gpt.py`](./03-gpt/gpt.py) → [`03-gpt/README.md`](./03-gpt/README.md)
