@@ -1,10 +1,10 @@
 # GPT_from_scratch
 
-A small, readable implementation of a **GPT-style language model built from scratch with PyTorch**.
+A from-scratch GPT implementation progressing from a bigram model to self-attention and a decoder-only Transformer.
 
-The goal of this repository is not to reproduce a production-scale LLM. Instead, it is to make the core ideas behind GPT visible: how text becomes tokens, how a model learns to predict the next token, how self-attention lets tokens use earlier context, and how repeated predictions become generated text.
+The goal of this repository is to make the core ideas behind GPT visible: how text becomes tokens, how a model learns to predict the next token, how self-attention lets tokens use earlier context, and how repeated predictions become generated text.
 
-> **Learning path:** start with the bigram model, see how it learns next-token prediction, then move to the notebook for the intuition behind attention, and finally inspect the complete decoder-only Transformer implementation.
+> **Learning path:** Start with the bigram model, move to the notebook to build intuition for attention, and finally explore the complete decoder-only Transformer implementation.
 
 ---
 
@@ -50,23 +50,23 @@ This repository is organized as a progression rather than a single giant model.
 
 | Stage | What it teaches | Deep dive |
 |---|---|---|
-| **Bigram model** | Next-token prediction with only the previous character as context | [`README_Bigram.md`](README_Bigram.md) |
-| **GPT notebook** | Tokenization, context windows, embeddings, attention, masking, and generation | [`README_gpt-dev.md`](README_gpt-dev.md) |
-| **GPT model** | A complete decoder-only Transformer implemented in PyTorch | [`README_gpt.md`](README_gpt.md) |
+| **01. Bigram** | Next-token prediction using only the previous character as context | [README](./01-bigram/README.md) |
+| **02. Attention** | Tokenization, context windows, embeddings, weighted aggregation, causal masking, and self-attention | [README](./02-attention/README.md) |
+| **03. GPT** | A complete decoder-only Transformer | [README](./03-gpt/README.md) |
 
 The progression is intentional:
 
 ```text
 Bigram
-  ↓
+   ↓
 Learn next-token prediction
-  ↓
+   ↓
 Understand context and weighted aggregation
-  ↓
+   ↓
 Introduce causal self-attention
-  ↓
+   ↓
 Stack Transformer blocks
-  ↓
+   ↓
 GPT-style autoregressive language model
 ```
 
@@ -74,7 +74,7 @@ GPT-style autoregressive language model
 
 ## The GPT architecture used here
 
-The main implementation in `gpt.py` is a **decoder-only Transformer** with:
+The main implementation in [`03-gpt/gpt.py`](./03-gpt/gpt.py) is a **decoder-only Transformer** with:
 
 - character-level tokenization
 - token embeddings
@@ -83,14 +83,14 @@ The main implementation in `gpt.py` is a **decoder-only Transformer** with:
 - 6 attention heads per block
 - embedding dimension of 384
 - context window of 256 characters
-- causal (masked) self-attention
+- causal self-attention
 - feed-forward networks
 - residual connections
 - LayerNorm
 - dropout
 - a final linear language-model head
 
-These details correspond to the implementation documented in [`README_gpt.md`](README_gpt.md).
+These details correspond to the implementation documented in [`03-gpt/README.md`](./03-gpt/README.md).
 
 ### High-level data flow
 
@@ -98,8 +98,8 @@ These details correspond to the implementation documented in [`README_gpt.md`](R
 flowchart TD
     A["Raw text"] --> B["Character tokenizer"]
     B --> C["Token IDs<br/>(B, T)"]
-
     C --> D["Token embeddings"]
+
     P["Position IDs"] --> E["Position embeddings"]
 
     D --> F["Add embeddings"]
@@ -114,7 +114,6 @@ flowchart TD
     K --> L["Logits<br/>(B, T, V)"]
     L --> M["Softmax"]
     M --> N["Next-token probabilities"]
-
     N --> O["Sample next token"]
     O --> C
 ```
@@ -135,7 +134,7 @@ x
 └── output
 ```
 
-The complete implementation uses this pattern repeatedly across the stack.
+The complete implementation uses this pattern repeatedly across the Transformer stack.
 
 ---
 
@@ -172,26 +171,28 @@ $$
 \right)V,
 $$
 
-where $M$ is the **causal mask**. Positions in the future are masked so that a token cannot use information that would not yet exist during generation.
+where \(M\) is the **causal mask**. Future positions are masked so that a token cannot use information that would not yet exist during generation.
 
 Conceptually:
 
 ```text
 Current token
      │
-     ├── Query ──────┐
-     │               │ compare
-Earlier tokens       │
-     │               ▼
-     ├── Keys ───→ Attention weights
-     │               │
-     └── Values ─────┘
-                     │
-                     ▼
+     ├── Query ──────────┐
+     │                   │
+     │                compare
+     │                   │
+Earlier tokens           ▼
+     │            Attention weights
+     ├── Keys ───────────┤
+     │                   │
+     └── Values ─────────┘
+                         │
+                         ▼
               Context-aware representation
 ```
 
-The notebook [`gpt-dev.ipynb`](gpt-dev.ipynb), documented in [`README_gpt-dev.md`](README_gpt-dev.md), builds toward this idea step by step.
+The notebook [`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb), documented in [`02-attention/README.md`](./02-attention/README.md), builds toward this idea step by step.
 
 ---
 
@@ -199,7 +200,7 @@ The notebook [`gpt-dev.ipynb`](gpt-dev.ipynb), documented in [`README_gpt-dev.md
 
 The model ultimately produces **logits**: unnormalized scores for every possible next token.
 
-For logits $z_1,\ldots,z_V$, softmax converts them into probabilities:
+For logits \(z_1,\ldots,z_V\), softmax converts them into probabilities:
 
 $$
 p_i
@@ -208,7 +209,7 @@ p_i
 {\sum_{j=1}^{V} e^{z_j}}.
 $$
 
-The training target is the actual next token. Cross-entropy encourages the model to place higher probability on that correct token.
+The training target is the actual next token. Cross-entropy encourages the model to assign higher probability to that token.
 
 During generation, the model can sample from the resulting distribution:
 
@@ -239,9 +240,9 @@ Input:  A B C D E
 Target: B C D E F
 ```
 
-For a sequence of length $T$, all next-token predictions can be trained in parallel because the causal mask prevents each position from seeing future tokens.
+For a sequence of length \(T\), all next-token predictions can be trained in parallel because the causal mask prevents each position from seeing future tokens.
 
-The training loop is the standard PyTorch pattern:
+The training loop follows the standard pattern:
 
 ```text
 sample batch
@@ -273,7 +274,7 @@ append token
 ...
 ```
 
-The code in `gpt.py` keeps only the most recent `block_size` tokens as the model context.
+The implementation keeps the most recent `block_size` tokens as the model context during generation.
 
 ---
 
@@ -281,19 +282,19 @@ The code in `gpt.py` keeps only the most recent `block_size` tokens as the model
 
 The bigram model is deliberately tiny.
 
-It uses a learned table where the previous character directly determines a distribution over the next character. In other words, it learns a simple transition model:
+It uses a learned table where the previous character directly determines a distribution over the next character:
 
 $$
 P(x_t \mid x_{t-1}).
 $$
 
-This is useful because nearly everything else in the project builds on the same core language-modeling idea:
+This makes the core language-modeling objective easy to see:
 
 > **Given context, predict the next token.**
 
-The difference is that GPT replaces the extremely limited notion of context in a bigram model with learned, context-dependent representations built using self-attention.
+GPT extends this idea by replacing the extremely limited bigram context with learned, context-dependent representations built using self-attention.
 
-See [`README_Bigram.md`](README_Bigram.md) for the implementation details.
+See [`01-bigram/README.md`](./01-bigram/README.md) for the implementation details.
 
 ---
 
@@ -302,64 +303,81 @@ See [`README_Bigram.md`](README_Bigram.md) for the implementation details.
 ```text
 GPT_from_scratch/
 │
-├── bigram.py
-├── gpt-dev.ipynb
-├── gpt.py
-├── input.txt
+├── 01-bigram/
+│   ├── bigram.py
+│   └── README.md
 │
-├── README_Bigram.md
-├── README_gpt-dev.md
-└── README_gpt.md
+├── 02-attention/
+│   ├── gpt-dev.ipynb
+│   └── README.md
+│
+├── 03-gpt/
+│   ├── gpt.py
+│   └── README.md
+│
+├── assets/
+│   ├── gpt-architecture.png
+│   └── self-attention.png
+│
+├── data/
+│   └── input.txt
+│
+├── README.md
+├── requirements.txt
+├── LICENSE
+└── .gitignore
 ```
 
-### Files
+### Main files
 
-**[`bigram.py`](bigram.py)**  
+**[`01-bigram/bigram.py`](./01-bigram/bigram.py)**  
 A minimal character-level bigram language model.
 
-**[`gpt-dev.ipynb`](gpt-dev.ipynb)**  
+**[`02-attention/gpt-dev.ipynb`](./02-attention/gpt-dev.ipynb)**  
 A step-by-step notebook that develops the ideas behind GPT-style modeling, including embeddings, weighted aggregation, causal attention, and normalization.
 
-**[`gpt.py`](gpt.py)**  
+**[`03-gpt/gpt.py`](./03-gpt/gpt.py)**  
 The complete decoder-only Transformer implementation.
 
-The three supporting READMEs provide the detailed code walkthroughs:
+### Documentation
 
-- [`README_Bigram.md`](README_Bigram.md)
-- [`README_gpt-dev.md`](README_gpt-dev.md)
-- [`README_gpt.md`](README_gpt.md)
+Each implementation has its own detailed README:
+
+- [`01-bigram/README.md`](./01-bigram/README.md)
+- [`02-attention/README.md`](./02-attention/README.md)
+- [`03-gpt/README.md`](./03-gpt/README.md)
+
+The root README is intended as the high-level overview; the folder-level READMEs contain the implementation details.
 
 ---
 
 ## Quick start
 
-Install PyTorch:
+Install the dependencies:
 
 ```bash
-pip install torch
+pip install -r requirements.txt
 ```
 
-Then run the model you want to explore:
+Then explore the bigram model:
 
 ```bash
-python bigram.py
+python 01-bigram/bigram.py
 ```
 
-or:
+Or run the complete GPT implementation:
 
 ```bash
-python gpt.py
+python 03-gpt/gpt.py
 ```
 
-The scripts train on `input.txt`, report training/validation loss, and generate text from the learned model.
-
-For the notebook, open:
+Open the attention notebook with Jupyter:
 
 ```text
-gpt-dev.ipynb
+02-attention/gpt-dev.ipynb
 ```
 
-and run the cells from top to bottom.
+> **Note:** Since the shared corpus is stored in `data/input.txt`, the Python implementations should reference that path when loading the training data.
 
 ---
 
@@ -397,7 +415,7 @@ $$
 \log P_\theta(x_t\mid x_{<t}).
 $$
 
-These three ideas connect most of the implementation:
+These three ideas connect much of the implementation:
 
 ```text
 Sequence probability
@@ -415,12 +433,13 @@ Backpropagation updates the model
 
 ## Where to go next
 
-If you want the conceptual route:
+For the conceptual route:
 
-**[`README_Bigram.md`](README_Bigram.md)** → **[`README_gpt-dev.md`](README_gpt-dev.md)** → **[`README_gpt.md`](README_gpt.md)**
+**[`01-bigram/README.md`](./01-bigram/README.md)**  
+→ **[`02-attention/README.md`](./02-attention/README.md)**  
+→ **[`03-gpt/README.md`](./03-gpt/README.md)**
 
-If you want to jump straight into the complete implementation:
+To jump straight into the complete implementation:
 
-**[`gpt.py`](gpt.py)** → **[`README_gpt.md`](README_gpt.md)**
-
----
+**[`03-gpt/gpt.py`](./03-gpt/gpt.py)**  
+→ **[`03-gpt/README.md`](./03-gpt/README.md)**
